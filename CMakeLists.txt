@@ -7,12 +7,10 @@ endif()
 set(PROJECT_VERSION 1.0.${PATCH_VERSION})
 project(helloworld VERSION ${PROJECT_VERSION})
 
-# Используем динамическую версию Boost
 set(Boost_USE_STATIC_LIBS OFF)
 set(Boost_USE_MULTITHREADED ON)
 set(Boost_USE_STATIC_RUNTIME OFF)
 
-# Для MinGW
 if(MINGW)
     set(Boost_COMPILER "-gcc")
 endif()
@@ -45,21 +43,15 @@ target_include_directories(test_version PRIVATE
 target_link_libraries(helloworld_cli PRIVATE
     helloworld
 )
-
-# Линковка тестов
 target_link_libraries(test_version
     ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY}
     helloworld
 )
 
 if(MINGW)
-    # Определения для динамической линковки Boost
     target_compile_definitions(test_version PRIVATE
         BOOST_ALL_DYN_LINK=1
     )
-    
-    # Находим правильный путь к DLL
-    # Используем find_file для поиска DLL
     find_file(BOOST_DLL
         NAMES libboost_unit_test_framework-mt.dll
         PATHS ${BOOST_ROOT}/bin
@@ -69,8 +61,7 @@ if(MINGW)
     )
     
     message(STATUS "Boost DLL found at: ${BOOST_DLL}")
-    
-    # Копируем DLL, если найдена
+
     if(BOOST_DLL)
         add_custom_command(TARGET test_version POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -83,7 +74,6 @@ if(MINGW)
     endif()
 endif()
 
-# Настройка предупреждений
 if (MSVC)
     target_compile_options(helloworld_cli PRIVATE /W4)
     target_compile_options(helloworld PRIVATE /W4)
