@@ -1,0 +1,91 @@
+name: 'C++ CI'
+
+on:
+  push:
+    branches:
+      - main
+      - feature/github_actions
+
+jobs:
+  build-ubuntu:
+    runs-on: ubuntu-latest
+    permissions: write-all
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install libboost-test-dev -y
+      
+      - name: Configure CMake
+        run: cmake . -DPATCH_VERSION=${{ github.run_number }}
+      
+      - name: Build
+        run: cmake --build .
+      
+      - name: Run tests
+        run: cmake --build . --target test
+      
+      - name: Package
+        run: cmake --build . --target package
+      
+      - name: Upload Ubuntu artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ubuntu-package
+          path: ./helloworld-1.0.${{ github.run_number }}-Linux.deb
+
+  build-windows:
+    runs-on: windows-latest
+    permissions: write-all
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      
+      - name: Install Boost
+        run: choco install boost-msvc-14.3 -y
+      
+      - name: Configure CMake
+        run: cmake . -DPATCH_VERSION=${{ github.run_number }}
+      
+      - name: Build
+        run: cmake --build . --config Release
+      
+      - name: Run tests
+        run: ctest -C Release
+      
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: ./Release/helloworld_cli.exe
+
+  create-release:
+    needs: [build-ubuntu, build-windows]
+    runs-on: ubuntu-latest
+    permissions: write-all
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+      
+      - name: Rename Windows executable
+        run: |
+          mv ./artifacts/windows-exe/helloworld_cli.exe ./artifacts/windows-exe/helloworld-1.0.${{ github.run_number }}-Windows.exe
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.run_number }}
+          name: Release ${{ github.run_number }}
+          draft: false
+          prerelease: false
+          files: |
+            ./artifacts/ubuntu-package/*.deb
+            ./artifacts/windows-exe/*.exe
