@@ -7,14 +7,14 @@ endif()
 set(PROJECT_VERSION 1.0.${PATCH_VERSION})
 project(helloworld VERSION ${PROJECT_VERSION})
 
-# КРИТИЧЕСКИ ВАЖНО: используем ДИНАМИЧЕСКУЮ версию Boost
-set(Boost_USE_STATIC_LIBS OFF)          # <-- ОТКЛЮЧАЕМ статическую линковку
+
+set(Boost_USE_STATIC_LIBS OFF)          
 set(Boost_USE_MULTITHREADED ON)
 set(Boost_USE_STATIC_RUNTIME OFF)
 
 find_package(Boost COMPONENTS unit_test_framework REQUIRED)
 
-# Отладочная информация
+
 message(STATUS "==========================================")
 message(STATUS "Boost include dirs: ${Boost_INCLUDE_DIRS}")
 message(STATUS "Boost library: ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY}")
@@ -37,13 +37,13 @@ target_include_directories(test_version PRIVATE ${Boost_INCLUDE_DIRS} "${CMAKE_B
 
 target_link_libraries(helloworld_cli PRIVATE helloworld)
 
-# Линковка тестов - используем то, что нашёл CMake
+
 target_link_libraries(test_version
     ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY}
     helloworld
 )
 
-# Если мы в MinGW, добавляем определение для динамической линковки
+
 if(MINGW)
     target_compile_definitions(test_version PRIVATE
         BOOST_ALL_DYN_LINK=1
@@ -51,7 +51,7 @@ if(MINGW)
     )
 endif()
 
-# Настройка предупреждений
+
 if (MSVC)
     target_compile_options(helloworld_cli PRIVATE /W4)
     target_compile_options(helloworld PRIVATE /W4)
