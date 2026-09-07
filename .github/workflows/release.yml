@@ -53,52 +53,33 @@ jobs:
         with:
           submodules: true
       
- 
       - name: Install Boost via Chocolatey
         run: |
-          choco install boost-msvc-14.3 -y --version=1.83.0
+          choco install boost-msvc-14.3 -y
         shell: powershell
       
-
       - name: Find Boost installation
         run: |
-
-          $boostPaths = @(
-            "C:\ProgramData\chocolatey\lib\boost-msvc-14.3",
-            "C:\ProgramData\chocolatey\lib\boost-msvc-14.3\lib\native",
-            "C:\ProgramData\chocolatey\lib\boost-msvc-14.3\lib\native\include",
-            "C:\ProgramData\chocolatey\lib\boost-msvc-14.3\lib\native\lib"
-          )
-          
-          foreach ($path in $boostPaths) {
-            if (Test-Path $path) {
-              Write-Host "Found: $path"
-              dir $path
-            }
-          }
-          
-
-          $boostRoot = "C:\ProgramData\chocolatey\lib\boost-msvc-14.3"
-          if (Test-Path $boostRoot) {
-            echo "BOOST_ROOT=$boostRoot" >> $env:GITHUB_ENV
-            echo "Boost found at: $boostRoot"
+          $boostPath = Get-ChildItem -Path "C:\ProgramData\chocolatey\lib" -Filter "boost*" -Directory | Select-Object -First 1
+          if ($boostPath) {
+            echo "BOOST_ROOT=$($boostPath.FullName)" >> $env:GITHUB_ENV
+            echo "Boost found at: $($boostPath.FullName)"
           } else {
-            # Пробуем найти в других местах
-            $found = Get-ChildItem -Path "C:\ProgramData\chocolatey\lib" -Filter "boost*" -Directory
-            if ($found) {
-              echo "BOOST_ROOT=$($found[0].FullName)" >> $env:GITHUB_ENV
-              echo "Boost found at: $($found[0].FullName)"
+            # Пробуем другие варианты
+            $altPaths = @(
+              "C:\Program Files\Boost",
+              "C:\Libraries\boost",
+              "C:\boost"
+            )
+            foreach ($path in $altPaths) {
+              if (Test-Path $path) {
+                echo "BOOST_ROOT=$path" >> $env:GITHUB_ENV
+                echo "Boost found at: $path"
+                break
+              }
             }
           }
         shell: powershell
-      
-      - name: Show Boost libraries
-        run: |
-          if (Test-Path env:BOOST_ROOT) {
-            dir "$env:BOOST_ROOT\lib" | Where-Object {$_.Name -like "*boost_unit_test*"}
-          }
-        shell: powershell
-        continue-on-error: true
       
       - name: Configure CMake
         run: |
