@@ -53,58 +53,42 @@ jobs:
         with:
           submodules: true
       
-      - name: Install Boost via Chocolatey
-        run: |
-          choco install boost-msvc-14.3 -y
-        shell: powershell
-      
-      - name: Find Boost installation
-        run: |
-          $boostPath = Get-ChildItem -Path "C:\ProgramData\chocolatey\lib" -Filter "boost*" -Directory | Select-Object -First 1
-          if ($boostPath) {
-            echo "BOOST_ROOT=$($boostPath.FullName)" >> $env:GITHUB_ENV
-            echo "Boost found at: $($boostPath.FullName)"
-          } else {
-            # Пробуем другие варианты
-            $altPaths = @(
-              "C:\Program Files\Boost",
-              "C:\Libraries\boost",
-              "C:\boost"
-            )
-            foreach ($path in $altPaths) {
-              if (Test-Path $path) {
-                echo "BOOST_ROOT=$path" >> $env:GITHUB_ENV
-                echo "Boost found at: $path"
-                break
-              }
-            }
-          }
-        shell: powershell
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: |
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-boost
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-make
+            mingw-w64-x86_64-ninja
       
       - name: Configure CMake
+        shell: msys2 {0}
         run: |
-          mkdir build
+          mkdir -p build
           cd build
-          cmake .. -DPATCH_VERSION=${{ github.run_number }} -DBOOST_ROOT="$env:BOOST_ROOT" -DCMAKE_BUILD_TYPE=Release
-        shell: powershell
+          cmake .. -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DPATCH_VERSION=${{ github.run_number }}
       
       - name: Build
+        shell: msys2 {0}
         run: |
           cd build
-          cmake --build . --config Release
-        shell: powershell
+          ninja
       
       - name: Run tests
+        shell: msys2 {0}
         run: |
           cd build
-          ctest -C Release --output-on-failure
-        shell: powershell
+          ctest --output-on-failure -C Release
       
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-exe
-          path: build/Release/helloworld_cli.exe
+          path: build/helloworld_cli.exe
 
   create-release:
     needs: [build-ubuntu, build-windows]
