@@ -53,18 +53,50 @@ jobs:
         with:
           submodules: true
       
+ 
       - name: Install Boost via Chocolatey
         run: |
-          choco install boost-msvc-14.3 -y
-          # Находим путь установки
-          echo "BOOST_ROOT=C:\ProgramData\chocolatey\lib\boost-msvc-14.3" >> $env:GITHUB_ENV
+          choco install boost-msvc-14.3 -y --version=1.83.0
         shell: powershell
       
 
-      - name: Check Boost installation
+      - name: Find Boost installation
         run: |
-          dir "C:\ProgramData\chocolatey\lib\boost-msvc-14.3"
-          dir "C:\ProgramData\chocolatey\lib\boost-msvc-14.3\lib"
+
+          $boostPaths = @(
+            "C:\ProgramData\chocolatey\lib\boost-msvc-14.3",
+            "C:\ProgramData\chocolatey\lib\boost-msvc-14.3\lib\native",
+            "C:\ProgramData\chocolatey\lib\boost-msvc-14.3\lib\native\include",
+            "C:\ProgramData\chocolatey\lib\boost-msvc-14.3\lib\native\lib"
+          )
+          
+          foreach ($path in $boostPaths) {
+            if (Test-Path $path) {
+              Write-Host "Found: $path"
+              dir $path
+            }
+          }
+          
+
+          $boostRoot = "C:\ProgramData\chocolatey\lib\boost-msvc-14.3"
+          if (Test-Path $boostRoot) {
+            echo "BOOST_ROOT=$boostRoot" >> $env:GITHUB_ENV
+            echo "Boost found at: $boostRoot"
+          } else {
+            # Пробуем найти в других местах
+            $found = Get-ChildItem -Path "C:\ProgramData\chocolatey\lib" -Filter "boost*" -Directory
+            if ($found) {
+              echo "BOOST_ROOT=$($found[0].FullName)" >> $env:GITHUB_ENV
+              echo "Boost found at: $($found[0].FullName)"
+            }
+          }
+        shell: powershell
+      
+      - name: Show Boost libraries
+        run: |
+          if (Test-Path env:BOOST_ROOT) {
+            dir "$env:BOOST_ROOT\lib" | Where-Object {$_.Name -like "*boost_unit_test*"}
+          }
         shell: powershell
         continue-on-error: true
       
@@ -104,12 +136,6 @@ jobs:
         with:
           path: ./artifacts
       
-      - name: List artifacts
-        run: |
-          ls -la ./artifacts/
-          ls -la ./artifacts/ubuntu-package/ || true
-          ls -la ./artifacts/windows-exe/ || true
-      
       - name: Create Release
         uses: softprops/action-gh-release@v2
         env:
@@ -121,4 +147,4 @@ jobs:
           prerelease: false
           files: |
             ./artifacts/ubuntu-package/*.deb
-            ./artifacts/windows-exe/*.exe
+            ./artifacts/windows-exe/helloworld_cli.exe
