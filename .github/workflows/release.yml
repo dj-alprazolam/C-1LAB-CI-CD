@@ -53,22 +53,26 @@ jobs:
         with:
           submodules: true
       
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgDirectory: '${{ github.workspace }}/vcpkg'
-          vcpkgGitCommitId: 'a7da05864a14f0a9f331b673d1f3d8348a52c8de'
-      
-      - name: Install Boost via vcpkg
+      - name: Install Boost via Chocolatey
         run: |
-          ${{ github.workspace }}/vcpkg/vcpkg install boost-unit-test-framework:x64-windows
+          choco install boost-msvc-14.3 -y
+          # Находим путь установки
+          echo "BOOST_ROOT=C:\ProgramData\chocolatey\lib\boost-msvc-14.3" >> $env:GITHUB_ENV
         shell: powershell
+      
+
+      - name: Check Boost installation
+        run: |
+          dir "C:\ProgramData\chocolatey\lib\boost-msvc-14.3"
+          dir "C:\ProgramData\chocolatey\lib\boost-msvc-14.3\lib"
+        shell: powershell
+        continue-on-error: true
       
       - name: Configure CMake
         run: |
           mkdir build
           cd build
-          cmake .. -DPATCH_VERSION=${{ github.run_number }} -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
+          cmake .. -DPATCH_VERSION=${{ github.run_number }} -DBOOST_ROOT="$env:BOOST_ROOT" -DCMAKE_BUILD_TYPE=Release
         shell: powershell
       
       - name: Build
@@ -103,18 +107,8 @@ jobs:
       - name: List artifacts
         run: |
           ls -la ./artifacts/
-          ls -la ./artifacts/ubuntu-package/
-          ls -la ./artifacts/windows-exe/
-      
-      - name: Rename artifacts
-        run: |
-          if [ -f ./artifacts/ubuntu-package/*.deb ]; then
-            mv ./artifacts/ubuntu-package/*.deb ./artifacts/ubuntu-package/helloworld-1.0.${{ github.run_number }}-Linux.deb
-          fi
-          
-          if [ -f ./artifacts/windows-exe/helloworld_cli.exe ]; then
-            cp ./artifacts/windows-exe/helloworld_cli.exe ./artifacts/windows-exe/helloworld-1.0.${{ github.run_number }}-Windows.exe
-          fi
+          ls -la ./artifacts/ubuntu-package/ || true
+          ls -la ./artifacts/windows-exe/ || true
       
       - name: Create Release
         uses: softprops/action-gh-release@v2
