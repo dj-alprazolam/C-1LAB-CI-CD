@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions: write-all
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
       
@@ -19,66 +19,105 @@ jobs:
         run: sudo apt-get update && sudo apt-get install libboost-test-dev -y
       
       - name: Configure CMake
-        run: cmake . -DPATCH_VERSION=${{ github.run_number }}
+        run: |
+          mkdir -p build
+          cd build
+          cmake .. -DPATCH_VERSION=${{ github.run_number }}
       
       - name: Build
-        run: cmake --build .
+        run: |
+          cd build
+          cmake --build . --config Release
       
       - name: Run tests
-        run: cmake --build . --target test
+        run: |
+          cd build
+          ctest --output-on-failure -C Release
       
       - name: Package
-        run: cmake --build . --target package
+        run: |
+          cd build
+          cmake --build . --target package
       
       - name: Upload Ubuntu artifact
         uses: actions/upload-artifact@v4
         with:
           name: ubuntu-package
-          path: ./helloworld-1.0.${{ github.run_number }}-Linux.deb
+          path: build/*.deb
 
   build-windows:
     runs-on: windows-latest
     permissions: write-all
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
       
-      - name: Install Boost
-        run: choco install boost-msvc-14.3 -y
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgDirectory: '${{ github.workspace }}/vcpkg'
+          vcpkgGitCommitId: 'a7da05864a14f0a9f331b673d1f3d8348a52c8de'
+      
+      - name: Install Boost via vcpkg
+        run: |
+          ${{ github.workspace }}/vcpkg/vcpkg install boost-unit-test-framework:x64-windows
+        shell: powershell
       
       - name: Configure CMake
-        run: cmake . -DPATCH_VERSION=${{ github.run_number }}
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DPATCH_VERSION=${{ github.run_number }} -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
+        shell: powershell
       
       - name: Build
-        run: cmake --build . --config Release
+        run: |
+          cd build
+          cmake --build . --config Release
+        shell: powershell
       
       - name: Run tests
-        run: ctest -C Release
+        run: |
+          cd build
+          ctest -C Release --output-on-failure
+        shell: powershell
       
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-exe
-          path: ./Release/helloworld_cli.exe
+          path: build/Release/helloworld_cli.exe
 
   create-release:
     needs: [build-ubuntu, build-windows]
     runs-on: ubuntu-latest
     permissions: write-all
-    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: ./artifacts
       
-      - name: Rename Windows executable
+      - name: List artifacts
         run: |
-          mv ./artifacts/windows-exe/helloworld_cli.exe ./artifacts/windows-exe/helloworld-1.0.${{ github.run_number }}-Windows.exe
+          ls -la ./artifacts/
+          ls -la ./artifacts/ubuntu-package/
+          ls -la ./artifacts/windows-exe/
+      
+      - name: Rename artifacts
+        run: |
+          if [ -f ./artifacts/ubuntu-package/*.deb ]; then
+            mv ./artifacts/ubuntu-package/*.deb ./artifacts/ubuntu-package/helloworld-1.0.${{ github.run_number }}-Linux.deb
+          fi
+          
+          if [ -f ./artifacts/windows-exe/helloworld_cli.exe ]; then
+            cp ./artifacts/windows-exe/helloworld_cli.exe ./artifacts/windows-exe/helloworld-1.0.${{ github.run_number }}-Windows.exe
+          fi
       
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
