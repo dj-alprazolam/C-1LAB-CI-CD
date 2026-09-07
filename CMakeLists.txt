@@ -7,13 +7,20 @@ endif()
 set(PROJECT_VERSION 1.0.${PATCH_VERSION})
 project(helloworld VERSION ${PROJECT_VERSION})
 
+# Используем динамическую версию Boost
 set(Boost_USE_STATIC_LIBS OFF)
 set(Boost_USE_MULTITHREADED ON)
 set(Boost_USE_STATIC_RUNTIME OFF)
 
+# Для MinGW
+if(MINGW)
+    set(Boost_COMPILER "-gcc")
+endif()
+
 find_package(Boost COMPONENTS unit_test_framework REQUIRED)
 
-add_definitions(-DBOOST_ALL_NO_LIB)
+message(STATUS "Boost include dirs: ${Boost_INCLUDE_DIRS}")
+message(STATUS "Boost library: ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY}")
 
 configure_file(version.h.in version.h)
 
@@ -26,28 +33,57 @@ set_target_properties(helloworld_cli helloworld test_version PROPERTIES
     CXX_STANDARD_REQUIRED ON
 )
 
-target_include_directories(helloworld PRIVATE "${CMAKE_BINARY_DIR}")
-target_include_directories(test_version PRIVATE ${Boost_INCLUDE_DIRS} "${CMAKE_BINARY_DIR}")
+target_include_directories(helloworld
+    PRIVATE "${CMAKE_BINARY_DIR}"
+)
 
-target_link_libraries(helloworld_cli PRIVATE helloworld)
+target_include_directories(test_version PRIVATE
+    ${Boost_INCLUDE_DIRS}
+    ${CMAKE_BINARY_DIR}
+)
 
+target_link_libraries(helloworld_cli PRIVATE
+    helloworld
+)
+
+# Линковка тестов
 target_link_libraries(test_version
     ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY}
     helloworld
 )
+
 if(MINGW)
-    target_link_libraries(test_version
-        mingwex
-        msvcrt
-    )
-    
+    # Определения для динамической линковки Boost
     target_compile_definitions(test_version PRIVATE
         BOOST_ALL_DYN_LINK=1
-        _WIN32_WINNT=0x0600
     )
+    
+    # Находим правильный путь к DLL
+    # Используем find_file для поиска DLL
+    find_file(BOOST_DLL
+        NAMES libboost_unit_test_framework-mt.dll
+        PATHS ${BOOST_ROOT}/bin
+              ${Boost_LIBRARY_DIR}/../bin
+              C:/msys64/mingw64/bin
+        NO_DEFAULT_PATH
+    )
+    
+    message(STATUS "Boost DLL found at: ${BOOST_DLL}")
+    
+    # Копируем DLL, если найдена
+    if(BOOST_DLL)
+        add_custom_command(TARGET test_version POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${BOOST_DLL}
+                $<TARGET_FILE_DIR:test_version>
+            COMMENT "Copying Boost DLL to output directory"
+        )
+    else()
+        message(WARNING "Boost DLL not found. Please ensure libboost_unit_test_framework-mt.dll is in your PATH.")
+    endif()
 endif()
 
-
+# Настройка предупреждений
 if (MSVC)
     target_compile_options(helloworld_cli PRIVATE /W4)
     target_compile_options(helloworld PRIVATE /W4)
